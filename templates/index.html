@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Scanner</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body style="position: relative;">
+    <h1>QR Code Manager</h1>
+
+    <!-- Choose Option Section -->
+    <div id="chooseOption">
+        <h2>What do you want to do?</h2>
+        <button id="scanQRCodeBtn">Scan QR Code</button>
+        <button id="generateQRCodeBtn">Generate QR Code</button>
+    </div>
+
+
+    <!-- QR Code Scan Form (Hidden Initially) -->
+    <!-- QR Code Scan Form -->
+    <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data" style="display: none;">
+        <h2>Scan QR Code</h2>
+        <input type="file" name="file" accept="image/*" required>
+        <button type="submit">Submit</button>
+    </form>
+
+    <!-- QR Code Generation Form -->
+    <form id="generateQRForm" action="/generate_qr" method="post" style="display: none;">
+        <h2>Generate QR Code</h2>
+        <input type="text" name="url" placeholder="Enter URL" required>
+        <button type="submit">Generate QR Code</button>
+    </form>
+
+    <!-- Loading Spinner -->
+    <div id="loading" style="display: none;">
+        <p>Loading...</p>
+        <img src="{{ url_for('static', filename='spinner.gif') }}" alt="Loading...">
+    </div>
+
+    <!-- The scanned URL and VirusTotal results will be displayed here -->
+    <div class="results-container" id="result"></div>
+
+    <!-- Back Button (visible after user selects an option) -->
+    <button id="backButton" style="display: none;" onclick="window.location.href='/'">Back</button>
+
+    <script>
+        // Event listeners for showing forms
+        document.getElementById('scanQRCodeBtn').addEventListener('click', function () {
+            document.getElementById('chooseOption').style.display = 'none';
+            document.getElementById('uploadForm').style.display = 'block';
+            document.getElementById('backButton').style.display = 'block';
+        });
+
+        document.getElementById('generateQRCodeBtn').addEventListener('click', function () {
+            document.getElementById('chooseOption').style.display = 'none';
+            document.getElementById('generateQRForm').style.display = 'block';
+            document.getElementById('backButton').style.display = 'block';
+        });
+
+        // Submit event listener for scanning form
+        // Submit event listener for scanning form
+        document.getElementById('uploadForm').addEventListener('submit', function (event) {
+            event.preventDefault(); // Prevent default form submission
+            document.getElementById('loading').style.display = 'block'; // Show loading spinner
+
+            const formData = new FormData(event.target); // Get form data
+
+            // Send the form data using fetch to the /upload route
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json()) // Parse the response as JSON
+                .then(data => {
+                    document.getElementById('loading').style.display = 'none'; // Hide the loading spinner
+                    const resultContainer = document.getElementById('result');
+                    resultContainer.innerHTML = ''; // Clear previous results
+
+                    // Check if there was an error
+                    if (data.error) {
+                        resultContainer.innerHTML = `<p>${data.error}</p>`;
+                    } else {
+                        // Display the scanned URL and VirusTotal result cards
+                        resultContainer.innerHTML = data.result;
+                        resultContainer.style.display = 'block'; // Ensure the results container is visible
+                    }
+
+                    // Show the back button after displaying the result
+                    document.getElementById('backButton').style.display = 'block';
+                })
+                .catch(error => {
+                    document.getElementById('loading').style.display = 'none'; // Hide the loading spinner
+                    const resultContainer = document.getElementById('result');
+                    resultContainer.innerHTML = `<p>Error: ${error.message}</p>`;
+                    resultContainer.style.display = 'block'; // Ensure the results container is visible
+                });
+        });
+        // Event listener for QR code generation form
+        document.getElementById('generateQRForm').addEventListener('submit', function (event) {
+            event.preventDefault();
+            document.getElementById('loading').style.display = 'block';
+
+            const formData = new FormData(event.target);
+
+            fetch('/generate_qr', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => {
+                    document.getElementById('loading').style.display = 'none';
+
+                    if (response.ok) {
+                        // Download the generated QR code
+                        return response.blob();
+                    } else {
+                        throw new Error('Failed to generate QR code');
+                    }
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = 'qrcode.png';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url); // Clean up
+                })
+                .catch(error => {
+                    document.getElementById('loading').style.display = 'none';
+                    alert('Error generating QR code: ' + error.message);
+                });
+        }); 
+    </script>
+</body>
+
+</html>
