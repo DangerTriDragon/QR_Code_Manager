@@ -64,7 +64,7 @@
         // Submit event listener for scanning form
         document.getElementById('uploadForm').addEventListener('submit', function (event) {
             event.preventDefault(); // Prevent default form submission
-            document.getElementById('loading').style.display = 'block'; // Show loading spinner
+            document.getElementById('loading').style.display = 'flex'; // Show loading spinner
 
             const formData = new FormData(event.target); // Get form data
 

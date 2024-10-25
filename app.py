@@ -21,30 +21,36 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 # Configuration
 class Config:
     VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
     UPLOAD_FOLDER = "uploads/"
-    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+    ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+
 
 app.config.from_object(Config)
 
 # Ensure the upload folder exists
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
+
 def allowed_file(filename: str) -> bool:
     """Check if the file extension is allowed."""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS
+    return (
+        "." in filename
+        and filename.rsplit(".", 1)[1].lower() in Config.ALLOWED_EXTENSIONS
+    )
+
 
 def scan_qr_code(image_path: str) -> Optional[str]:
     """
     Scan QR code from image and return the decoded data.
-    
+
     Args:
         image_path (str): Path to the image file
-        
+
     Returns:
         Optional[str]: Decoded QR code data or None if no QR code is found
     """
@@ -53,7 +59,7 @@ def scan_qr_code(image_path: str) -> Optional[str]:
         if img is None:
             logger.error(f"Failed to load image: {image_path}")
             return None
-            
+
         detector = cv2.QRCodeDetector()
         data, vertices, _ = detector.detectAndDecode(img)
         return data if data else None
@@ -61,13 +67,14 @@ def scan_qr_code(image_path: str) -> Optional[str]:
         logger.error(f"Error scanning QR code: {str(e)}")
         return None
 
+
 def is_bank_url(url: str) -> bool:
     """
     Check if the scanned URL contains any bank-related terms.
-    
+
     Args:
         url (str): URL to check
-        
+
     Returns:
         bool: True if URL contains bank-related terms, False otherwise
     """
@@ -75,21 +82,30 @@ def is_bank_url(url: str) -> bool:
     url = re.sub(r"[^\w\s@]", "", url)
 
     bank_terms = {
-        "@upi", "@jupiteraxis", "@oksbi", "@okhdfcbank",
-        "@hdfcbank", "@icici", "@dbs", "@fbl",
-        "@oksbi", "@okaxis", "@okicici"
+        "@upi",
+        "@jupiteraxis",
+        "@oksbi",
+        "@okhdfcbank",
+        "@hdfcbank",
+        "@icici",
+        "@dbs",
+        "@fbl",
+        "@oksbi",
+        "@okaxis",
+        "@okicici",
     }
 
     return any(term in url for term in bank_terms)
 
+
 def check_url_virustotal(api_key: str, url: str) -> str:
     """
     Check URL on VirusTotal and return formatted HTML results.
-    
+
     Args:
         api_key (str): VirusTotal API key
         url (str): URL to check
-        
+
     Returns:
         str: Formatted HTML with VirusTotal results
     """
@@ -103,40 +119,54 @@ def check_url_virustotal(api_key: str, url: str) -> str:
         analysis = client.get_object(f"/urls/{url_id}")
         stats = analysis.last_analysis_stats
 
+        print('called')
+        print(escape(url))
         return f"""
-        <div class="results-container">
-            <div class="result-card malicious">
-                <h3>Malicious</h3>
-                <div class="icon">❌</div>
-                <p>{stats['malicious']}</p>
+            <div class="results-container">
+                <p>
+                    Scanned URL:
+                    <a href="{escape(url)}" target="_top" rel="noopener noreferrer">{escape(url)}</a>
+                </p>
+                <div class="result-card-container">
+                    <div class="result-card malicious">
+                    <h3>Malicious</h3>
+                    <div class="icon">❌</div>
+                    <p>{stats['malicious']}</p>
+                    </div>
+                    <div class="result-card suspicious">
+                    <h3>Suspicious</h3>
+                    <div class="icon">⚠️</div>
+                    <p>{stats['suspicious']}</p>
+                    </div>
+                    <div class="result-card harmless">
+                    <h3>Harmless</h3>
+                    <div class="icon">✅</div>
+                    <p>{stats['harmless']}</p>
+                    </div>
+                    <div class="result-card undetected">
+                    <h3>Undetected</h3>
+                    <div class="icon">❓</div>
+                    <p>{stats['undetected']}</p>
+                    </div>
+                </div>
             </div>
-            <div class="result-card suspicious">
-                <h3>Suspicious</h3>
-                <div class="icon">⚠️</div>
-                <p>{stats['suspicious']}</p>
-            </div>
-            <div class="result-card harmless">
-                <h3>Harmless</h3>
-                <div class="icon">✅</div>
-                <p>{stats['harmless']}</p>
-            </div>
-            <div class="result-card undetected">
-                <h3>Undetected</h3>
-                <div class="icon">❓</div>
-                <p>{stats['undetected']}</p>
-            </div>
-        </div>
-        """
+            """
     except Exception as e:
         logger.error(f"VirusTotal API error: {str(e)}")
-        return f"<p>Error checking URL: {escape(str(e))}</p>"
+        print(e)
+        if is_bank_url(url):
+            return "<p><strong>Warning:</strong><mark> This QR code is associated with a bank URL. Proceed with caution.</mark></p>"
+        else:
+            return f"<p>Error checking URL: {escape(str(e))}</p>"
     finally:
         client.close()
+
 
 # Routes
 @app.route("/")
 def index():
     return render_template("index.html")
+
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
@@ -163,21 +193,14 @@ def upload_file():
         # Clean up the uploaded file
         os.remove(file_path)
 
-        bank_message = ""
-        if is_bank_url(scanned_url):
-            bank_message = "<p><strong>Warning:</strong><mark> This QR code is associated with a bank URL. Proceed with caution.</mark></p>"
-
         result_html = check_url_virustotal(Config.VIRUSTOTAL_API_KEY, scanned_url)
-        response_html = f"""
-        <p>Scanned URL: <a href="{escape(scanned_url)}" target="_blank" rel="noopener noreferrer">{escape(scanned_url)}</a></p>
-        {bank_message}
-        {result_html}
-        """
-        return jsonify(result=response_html)
+
+        return jsonify(result=result_html)
 
     except Exception as e:
         logger.error(f"Error processing upload: {str(e)}")
         return jsonify(error="An error occurred while processing the file"), 500
+
 
 @app.route("/generate_qr", methods=["POST"])
 def generate_qr():
@@ -212,8 +235,6 @@ def generate_qr():
         logger.error(f"Error generating QR code: {str(e)}")
         return jsonify(error=f"Failed to generate QR code"), 500
 
+
 if __name__ == "__main__":
     app.run(debug=False)  # Set debug=False in production
-
-
-print("test")
