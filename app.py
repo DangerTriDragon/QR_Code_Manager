@@ -214,3 +214,6 @@ def generate_qr():
 
 if __name__ == "__main__":
     app.run(debug=False)  # Set debug=False in production
+
+
+print("test")
