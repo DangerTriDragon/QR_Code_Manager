@@ -32,11 +32,9 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # Function to scan QR code from image
 def scan_qr_code(image_path):
     img = cv2.imread(image_path)
-    qr_codes = decode(img)
-    for qr_code in qr_codes:
-        data = qr_code.data.decode("utf-8")
-        return data
-    return None
+    detector = cv2.QRCodeDetector()
+    data, vertices, _ = detector.detectAndDecode(img)
+    return data if data else None
 
 
 # List of bank-related terms
